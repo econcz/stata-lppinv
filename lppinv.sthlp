@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  31jan2022}{...}
+{* *! version 1.0.1  31jan2022}{...}
 {vieweralsosee "[TS] arima" "mansection TS arima"}{...}
 {vieweralsosee "" "--"}{...}
 {vieweralsosee "[TS] arima postestimation" "help arima postestimation"}{...}
@@ -110,7 +110,7 @@ Non-typical constrained OLS ({bf:cOLS}) is based on constraints in model and/or
 data but not in parameters. Typically, such models are of size ≤ {bf:2N} where
 {bf:N} is the number of observations (Bolotov, 2014). Furthermore, the number
 of their parameters may vary in the LHS from row to row (e.g. level vs
-derivation).
+derivative).
 
 {pstd}
 {bf:Example of a non-typical cOLS problem:}

@@ -1,4 +1,4 @@
-*! version 1.0.0  31jan2022
+*! version 1.0.1  31jan2022
 program define lppinv, rclass byable(recall)
 	version 16.0
 	/*
@@ -137,7 +137,7 @@ mata set matastrict on
 	a = (rows(C) ? C,(rows(S) ? S : J(rows(C),0,.)) : J(0,cols(M) + cols(S),.))\
 		(rows(M) ? M,J(rows(M),cols(S),0) : J(0,cols(C) + cols(S),.))
 	if (f_d) _diag(a, 0)                             /* diagonal of `a' -> 0  */
-	C = S = rows(S)                                  /* clear memory          */
+	C = S = cols(S)                                  /* clear memory          */
 	/*`b` -> (., 1)                                                           */
 	b = colshape(b', 1)
 	/* drop missing values of `a`, `b`                                        */
