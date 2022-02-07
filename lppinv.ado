@@ -1,4 +1,4 @@
-*! version 1.0.1  31jan2022
+*! version 1.1.0  31jan2022  I I Bolotov
 program define lppinv, rclass byable(recall)
 	version 16.0
 	/*
@@ -13,17 +13,15 @@ program define lppinv, rclass byable(recall)
 		Author: Ilya Bolotov, MBA, Ph.D.                                        
 		Date: 31 January 2022                                                   
 	*/
-
 	// syntax                                                                   
 	syntax																	///
-	anything [if] [in] [,												///
+	anything [if] [in] [,													///
 		COLS TM																///
 		Model(string) Constraints(string) Slackvars(string)					///
 		ZERODiagonal noMC													///
 		TOLerance(real `=c(epsdouble)') Level(cilevel)						///
 		SEED(int `=c(rngseed_mt64s)') ITERate(int 500) DISTribution(string)	///
 	]
-
 	// adjust and preprocess options                                            
 	if "`cols'" != "" & "`tm'" != "" {				 // either cOLS or TM option
 		di as err "options cols and tm are mutually incompatible"
@@ -32,13 +30,11 @@ program define lppinv, rclass byable(recall)
 	if `"`distribution'"' == "" {					 // function name -> pointer
 		loc distribution "lppinv_runiform"
 	}
-
 	// select a subset of the data (if applicable)                              
 	if `"`if'`in'"' != "" {
 		preserve
 		qui keep `if' `in'
 	}
-
 	// perform the pinv estimation via SVD                                      
 	mata: lppinv(                                                           ///
 		"`cols'`tm'", `"`anything'"', `"`model'"', `"`constraints'"',       ///
@@ -46,14 +42,11 @@ program define lppinv, rclass byable(recall)
 		("`mc'" != "" ? 1 : 0), /* print output */ 1,                       ///
 		`tolerance', `level', `seed', `iterate', &`distribution'()          ///
 	)
-
-	// return output
+	// return output                                                            
 	ret add
 end
 
 version 16.0
-clear mata
-
 loc RS        real scalar
 loc RV        real colvector
 loc RM        real matrix
@@ -75,7 +68,6 @@ mata set matastrict on
 	`RV' x, e
 	`RM' b, M, C, S, a
 	`TM' tmp, f
-
 	// general configuration                                                    
 	tmp   = _stata("`version' tsset, noq", 1)
 	b     = (! _stata("`version' confirm numeric var "           + /* RHS     */
@@ -106,7 +98,6 @@ mata set matastrict on
 	seed  = seed  != . ? seed : c("rngseed_mt64s")   /* MC seed               */
 	iter  = iter  != . ? iter : 500                  /* MC iterations         */
 	dist  = dist       ? dist : &lppinv_runiform()   /* MC distribution       */
-
 	// prepare LHS (left-hand side), `a`, and RHS (right-hand side), `b`        
 	if (strlower(lp) == "cols") {                    /* LS-LP type: cOLS      */
 		if (rows(b) < rows(M) + rows(C)) b = b,b
@@ -145,17 +136,16 @@ mata set matastrict on
 	b = select(b, (tmp)                               :== 0)
 	st_matrix("r(a)", a, "hidden")
 	st_matrix("r(b)", b, "hidden")
-
 	// obtain the SVD-based solution of the matrix equation `a @ x = b`         
 	x = svsolve(a, b, C, tol)                        /* solution and NRMSE    */
-	e = e\sqrt((tmp=b - a * x)'tmp / (r=rows(b)) / variance(b))
+	e = e\sqrt(cross((tmp=b - a * x), tmp) / (r=rows(b)) / variance(b))
 	/* regression results (if applicable)                                     */
 	st_framecreate(f=st_tempname())
 	if (rows(x) <= r) {
-		tmp = _stata("`version' frame "+f+": svmat r(b), n(b)", 1)             &
-			  _stata("`version' frame "+f+": svmat r(a), n(a)", 1)             &
-			  _stata("`version' frame "+f+": reg b1 a*, noc "                  +
-			  "l("+strofreal(lvl)+")",   1 - f_t)
+		(void) _stata("`version' frame "+f+": svmat r(b), n(b)", 1)            &
+			   _stata("`version' frame "+f+": svmat r(a), n(a)", 1)            &
+			   _stata("`version' frame "+f+": reg b1 a*, noc "                 +
+			   "l("+strofreal(lvl)+")",   1 - f_t)
 	}
 	/* NRMSE t-test for `a', based on MC with iter simulations                */
 	if ((e[1] != .) & (1 - f_cv)) {                  /* skip if NRMSE == .    */
@@ -166,22 +156,20 @@ mata set matastrict on
 		printf("----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5\n")
 		rseed(seed)
 		for(i = 1; i < (iter + 1); i++) {
-			e = e\sqrt((tmp=(b=(*dist)(r, 1)) - a * svsolve(a, b, C, tol))'tmp /
-			      r / variance(b))
+			e = e\sqrt(cross((tmp=(b=(*dist)(r,1)) - a * svsolve(a, b, C, tol)),
+			      tmp) / r / variance(b))
 			if (! mod(i, 5)) { printf("....."); displayflush(); }
 			if (! mod(i, 50))  printf("%"+strofreal(e[2])+".0fc\n", i)
 		}
 		st_matrix("r(e)", e[3::rows(e)], "hidden")
-		tmp = _stata("`version' frame "+f+": svmat r(e), n(e)", 1)             &
-			  _stata("`version' frame "+f+": ttest e1 == "                     +
-			  strofreal(e[1]) + ", l("+strofreal(lvl)+")", 1 - f_t)
+		(void) _stata("`version' frame "+f+": svmat r(e), n(e)", 1)            &
+			   _stata("`version' frame "+f+": ttest e1 == "                    +
+			   strofreal(e[1]) + ", l("+strofreal(lvl)+")", 1 - f_t)
 	}
-
 	// return the solution `x', matrix `a' and NRMSE                            
 	st_matrix("r(solution)", colshape(x[1::rows(x)-S], c != . ? c : 1))
 	st_matrix("r(a)",        a, "hidden")
 	st_numscalar("r(nrmse)", e[1])
 }
-
 `RM' lppinv_runiform(`RS' r, `RS' c) return(runiform(r, c))        /* dummy   */
 end
