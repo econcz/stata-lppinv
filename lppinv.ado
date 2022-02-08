@@ -115,7 +115,8 @@ mata set matastrict on
 		/* missing values of M -> 0                                           */
 		if (rows(M)) _editmissing(M, 0)
 		if (f_d) M = (rows(M) ? M : J(0,r*c,.))\     /* diagonal of `a` -> 0  */
-		             (I(min((r, c)))#(1,J(1,c,0)))[.,(1..r*c)]
+		             ((tmp=(I(min((r, c)))#(1,J(1,c,0)))[.,(1..min((r,c))*c)]), 
+		             J(rows(tmp),r*c-cols(tmp),0))
 	} else {
 		if (! rows(b) | (rows(b) & cols(b) != 2 - ! cols(M) - ! cols(C))       |
 		                (rows(S) & cols(S) != 2 - ! cols(M) - ! cols(C))       |
@@ -132,9 +133,8 @@ mata set matastrict on
 	if (f_d & strlower(lp) != "tm") _diag(a, 0)      /* diagonal of `a` -> 0  */
 	C = S = cols(S)                                  /* clear memory          */
 	/*`b` -> (., 1)                                                           */
-	b = colshape(b', 1)
-	if (f_d & strlower(lp) == "tm") b = b\J(min((r, c)),1,0)
-	                                                 /* diagonal of `a` -> 0  */
+	b = select(tmp=colshape(b', 1), tmp :< .)\       /* diagonal of `a` -> 0  */
+        (f_d & strlower(lp) == "tm" ? J(min((r, c)),1,0) : J(0,1,0))
 	/* drop missing values of `a`, `b`                                        */
 	a = select(a, (tmp=rowmissing(a) + rowmissing(b)) :== 0)
 	b = select(b, (tmp)                               :== 0)
