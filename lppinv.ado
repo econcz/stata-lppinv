@@ -1,4 +1,4 @@
-*! version 1.1.0  31jan2022  I I Bolotov
+*! version 1.1.1  31jan2022  I I Bolotov
 program define lppinv, rclass byable(recall)
 	version 16.0
 	/*
@@ -114,6 +114,8 @@ mata set matastrict on
 		C = I(r)#J(1,c,1)\J(1,r,1)#I(c)
 		/* missing values of M -> 0                                           */
 		if (rows(M)) _editmissing(M, 0)
+		if (f_d) M = (rows(M) ? M : J(0,r*c,.))\     /* diagonal of `a` -> 0  */
+		             (I(min((r, c)))#(1,J(1,c,0)))[.,(1..r*c)]
 	} else {
 		if (! rows(b) | (rows(b) & cols(b) != 2 - ! cols(M) - ! cols(C))       |
 		                (rows(S) & cols(S) != 2 - ! cols(M) - ! cols(C))       |
@@ -127,10 +129,12 @@ mata set matastrict on
 	/* M, C, S -> `a`                                                         */
 	a = (rows(C) ? C,(rows(S) ? S : J(rows(C),0,.)) : J(0,cols(M) + cols(S),.))\
 		(rows(M) ? M,J(rows(M),cols(S),0) : J(0,cols(C) + cols(S),.))
-	if (f_d) _diag(a, 0)                             /* diagonal of `a' -> 0  */
+	if (f_d & strlower(lp) != "tm") _diag(a, 0)      /* diagonal of `a` -> 0  */
 	C = S = cols(S)                                  /* clear memory          */
 	/*`b` -> (., 1)                                                           */
 	b = colshape(b', 1)
+	if (f_d & strlower(lp) == "tm") b = b\J(min((r, c)),1,0)
+	                                                 /* diagonal of `a` -> 0  */
 	/* drop missing values of `a`, `b`                                        */
 	a = select(a, (tmp=rowmissing(a) + rowmissing(b)) :== 0)
 	b = select(b, (tmp)                               :== 0)
