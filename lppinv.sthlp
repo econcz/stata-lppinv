@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.1.1  31jan2022}{...}
+{* *! version 1.1.2  30sep2022}{...}
 {vieweralsosee "[TS] arima" "mansection TS arima"}{...}
 {vieweralsosee "" "--"}{...}
 {vieweralsosee "[TS] arima postestimation" "help arima postestimation"}{...}
@@ -54,7 +54,7 @@ test the normalized RMSE
 {synopt:{opth tol:erance(real)}}{helpb [M-1] tolerance:roundoff error},
         a number to determine when a number is small enough to be considered
         zero (optional, not specifying {it:tol} is equivalent to specifying
-        {it:tol}=1){p_end}
+        {it:tol}=0){p_end}
 {synopt:{opth l:evel(#)}} confidence level (by default: {helpb clevel:c(level)})
 
 {syntab :Monte-Carlo-based t-test}
@@ -71,6 +71,7 @@ test the normalized RMSE
         {cmd:lppinv}, the full list of  built-in functions is available
         {help mf_runiform:here}){p_end}
 {synopt:{opt nomc}}skip the Monte Carlo-based t-test{p_end}
+{synopt:{opt notrace}}hide any output with the exception of dots{p_end}
 {synoptline}
 {p2colreset}{...}
 {p 4 6 2}
@@ -229,7 +230,7 @@ For Python-savy users there is a Python version of {cmd:lppinv}
 
 {phang}
 Albert, A., 1972. {it:Regression And The Moore-Penrose Pseudoinverse.}
-    New York: Academic Press.
+New York: Academic Press.
 
 {phang}
 Bolotov, I. 2014. {it:Modelling of Time Series Cyclical Component on a Defined}

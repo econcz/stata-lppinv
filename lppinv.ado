@@ -1,4 +1,4 @@
-*! version 1.1.1  31jan2022  I I Bolotov
+*! version 1.1.2  30sep2022  I I Bolotov
 program define lppinv, rclass byable(recall)
 	version 16.0
 	/*
@@ -13,14 +13,14 @@ program define lppinv, rclass byable(recall)
 		Author: Ilya Bolotov, MBA, Ph.D.                                        
 		Date: 31 January 2022                                                   
 	*/
-	// syntax                                                                   
 	syntax																	///
 	anything [if] [in] [,													///
 		COLS TM																///
 		Model(string) Constraints(string) Slackvars(string)					///
 		ZERODiagonal noMC													///
-		TOLerance(real `=c(epsdouble)') Level(cilevel)						///
+		TOLerance(real 0) Level(cilevel)									///
 		SEED(int `=c(rngseed_mt64s)') ITERate(int 500) DISTribution(string)	///
+		noTRACE																///
 	]
 	// adjust and preprocess options                                            
 	if "`cols'" != "" & "`tm'" != "" {				 // either cOLS or TM option
@@ -39,8 +39,9 @@ program define lppinv, rclass byable(recall)
 	mata: lppinv(                                                           ///
 		"`cols'`tm'", `"`anything'"', `"`model'"', `"`constraints'"',       ///
 		`"`slackvars'"', ("`zerodiagonal'" != "" ? 1 : 0),                  ///
-		("`mc'" != "" ? 1 : 0), /* print output */ 1,                       ///
-		`tolerance', `level', `seed', `iterate', &`distribution'()          ///
+		("`mc'" != "" ? 0 : 1), ("`trace'" != "" ? 0 : 1),                  ///
+		(`tolerance' ? `tolerance' : .), `level', `seed', `iterate',        ///
+		&`distribution'()                                                   ///
 	)
 	// return output                                                            
 	ret add
@@ -68,6 +69,7 @@ mata set matastrict on
 	`RV' x, e
 	`RM' b, M, C, S, a
 	`TM' tmp, f
+
 	// general configuration                                                    
 	tmp   = _stata("`version' tsset, noq", 1)
 	b     = (! _stata("`version' confirm numeric var "           + /* RHS     */
@@ -89,18 +91,24 @@ mata set matastrict on
 		    regexr(lhs_s, ".+\.", ""), 1)
 		? st_data(., (! tmp ? _st_tsrevar(tokens(lhs_s)) : tokens(lhs_s)))
 		: (length(tokens(lhs_s)) == 1 ? st_matrix(lhs_s) : J(0,0,.))
-	) 
+	)
 	f_d   = f_d   != . ? f_d  : 0                    /* flag: zero-diagonal   */
-	f_cv  = f_cv  != . ? f_cv : 0                    /* flag: critical values */
+	f_cv  = f_cv  != . ? f_cv : 1                    /* flag: critical values */
 	f_t   = f_t   != . ? f_t  : 1                    /* flag: trace           */
-	tol   = tol   != . ? tol  : c("epsdouble")       /* tolerance             */
+	tol   = tol   != . ? tol  : .                    /* tolerance             */
 	lvl   = lvl   != . ? lvl  : c("level")           /* confidence level      */
 	seed  = seed  != . ? seed : c("rngseed_mt64s")   /* MC seed               */
 	iter  = iter  != . ? iter : 500                  /* MC iterations         */
 	dist  = dist       ? dist : &lppinv_runiform()   /* MC distribution       */
+
 	// prepare LHS (left-hand side), `a`, and RHS (right-hand side), `b`        
 	if (strlower(lp) == "cols") {                    /* LS-LP type: cOLS      */
-		if (rows(b) < rows(M) + rows(C)) b = b,b
+		if (! rows(b) | (rows(b) & cols(b) != 1)                               |
+		                (rows(S) & cols(S) != 1)) {
+			errprintf("Error: cOLS requires one column in `b`\n")
+			exit(503)
+		}
+		if (rows(C) + rows(M) < rows(b)) b = b,b
 	}
 	if (strlower(lp) == "tm") {                      /* LS-LP type: TM        */
 		if (! rows(b) | (rows(b) & cols(b) != 2)                               |
@@ -109,71 +117,73 @@ mata set matastrict on
 			exit(503)
 		}
 		/* C -> characteristic matrix                                         */
-		r = rows(select(b[.,1], b[.,1] :< .))        /* rows and cols         */
-		c = rows(select(b[.,2], b[.,2] :< .))
+		i = rows(b) - rows(M)
+		r = rows(select(tmp=b[1..i,1], tmp :< .))    /* rows and cols         */
+		c = rows(select(tmp=b[1..i,2], tmp :< .))
 		C = I(r)#J(1,c,1)\J(1,r,1)#I(c)
-		/* missing values of M -> 0                                           */
-		if (rows(M)) _editmissing(M, 0)
-		if (f_d) M = (rows(M) ? M : J(0,r*c,.))\     /* diagonal of `a` -> 0  */
-		             ((tmp=(I(min((r, c)))#(1,J(1,c,0)))[.,(1..min((r,c))*c)]), 
-		             J(rows(tmp),r*c-cols(tmp),0))
-	} else {
-		if (! rows(b) | (rows(b) & cols(b) != 2 - ! cols(M) - ! cols(C))       |
-		                (rows(S) & cols(S) != 2 - ! cols(M) - ! cols(C))       |
-		      rows(S) & (rows(b)           != rows(S))                         |
-		      length(b)                    != rows(M) + rows(C)) {
-			errprintf("Error: `a` and `b` are not conformable\n")
-			exit(503)
-		}
 	}
-	if (rows(S)) S = select(tmp=colshape(S', 1), tmp :< .)
+	/* check dimensions of C, S, M (the elements of `a`) and `b`              */
+	if (rows(C) + rows(M) != (strlower(lp) == "tm" ? r + c +rows(M) : rows(b)) |
+	    rows(S) & rows(S) != rows(C)) {
+		errprintf("Error: `a` and `b` are not conformable\n")
+		exit(503)
+	}
 	/* M, C, S -> `a`                                                         */
 	a = (rows(C) ? C,(rows(S) ? S : J(rows(C),0,.)) : J(0,cols(M) + cols(S),.))\
-		(rows(M) ? M,J(rows(M),cols(S),0) : J(0,cols(C) + cols(S),.))
-	if (f_d & strlower(lp) != "tm") _diag(a, 0)      /* diagonal of `a` -> 0  */
+	    (rows(M) ? M,J(rows(M),cols(S),0) : J(0,cols(C) + cols(S),.))
+	if (f_d) { if (strlower(lp) != "tm") _diag(a, 0);/* diagonal of `a` -> 0  */
+	           else M = (rows(M) ? M : J(0,r*c,.))\  /* diagonal of `C` -> M  */
+	           ((tmp=(I(min((r, c)))#(1,J(1,c,0)))[.,(1..min((r,c))*c)]),
+	           J(rows(tmp),r*c-cols(tmp),0)); }
 	C = S = cols(S)                                  /* clear memory          */
 	/*`b` -> (., 1)                                                           */
-	b = select(tmp=colshape(b', 1), tmp :< .)\       /* diagonal of `a` -> 0  */
-        (f_d & strlower(lp) == "tm" ? J(min((r, c)),1,0) : J(0,1,0))
+	b = strlower(lp) == "tm" ?
+	    b[1..r,1]\b[1..c,2]\(rows(M) ? b[max((r, c))+1..rows(b),1] : J(0,1,.)) :
+	    colshape(b, 1)
+	if (f_d) b = b\(f_d ? J(rows(a)-rows(b),1,0) : J(0,1,0))
 	/* drop missing values of `a`, `b`                                        */
-	a = select(a, (tmp=rowmissing(a) + rowmissing(b)) :== 0)
-	b = select(b, (tmp)                               :== 0)
+	a = select(a, (tmp=rowmissing(a)+rowmissing(b)) :== 0)
+	b = select(b,  tmp                              :== 0)
 	st_matrix("r(a)", a, "hidden")
 	st_matrix("r(b)", b, "hidden")
+
 	// obtain the SVD-based solution of the matrix equation `a @ x = b`         
 	x = svsolve(a, b, C, tol)                        /* solution and NRMSE    */
-	e = e\sqrt(cross((tmp=b - a * x), tmp) / (r=rows(b)) / variance(b))
+	e = e\sqrt(cross((tmp=b - a * x), tmp) * (r=rows(b)) / variance(b))
 	/* regression results (if applicable)                                     */
 	st_framecreate(f=st_tempname())
-	if (rows(x) <= r) {
+	if (cols(a) <= rows(b)) {
 		(void) _stata("`version' frame "+f+": svmat r(b), n(b)", 1)            &
-			   _stata("`version' frame "+f+": svmat r(a), n(a)", 1)            &
-			   _stata("`version' frame "+f+": reg b1 a*, noc "                 +
-			   "l("+strofreal(lvl)+")",   1 - f_t)
+		       _stata("`version' frame "+f+": svmat r(a), n(a)", 1)            &
+		       _stata("`version' frame "+f+": reg b1 a*, noc  "                +
+		       "l("+strofreal(lvl)+")",                     ! f_t)
 	}
 	/* NRMSE t-test for `a', based on MC with iter simulations                */
-	if ((e[1] != .) & (1 - f_cv)) {                  /* skip if NRMSE == .    */
+	if (e[1] != . & f_cv) {                          /* skip if NRMSE == .    */
 		e = e\((tmp=trunc(floatround(log10(iter)))) + trunc(floatround(tmp / 3))
-			  + 2)                                   /* format: %e[2].0fc     */
-		printf("\n{txt}Simulations ({res}%"+ strofreal(e[2] - 1)+".0fc{txt})\n",
-		iter)
+		      + 2)                                   /* format: %e[2].0fc     */
+		printf("\n{txt}Simulations ({res}%"+strofreal(e[2] - 1)+".0fc{txt})\n",
+		       iter)
 		printf("----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5\n")
 		rseed(seed)
 		for(i = 1; i < (iter + 1); i++) {
 			e = e\sqrt(cross((tmp=(b=(*dist)(r,1)) - a * svsolve(a, b, C, tol)),
-			      tmp) / r / variance(b))
+			      tmp) * r / variance(b))
 			if (! mod(i, 5)) { printf("....."); displayflush(); }
 			if (! mod(i, 50))  printf("%"+strofreal(e[2])+".0fc\n", i)
 		}
 		st_matrix("r(e)", e[3::rows(e)], "hidden")
 		(void) _stata("`version' frame "+f+": svmat r(e), n(e)", 1)            &
-			   _stata("`version' frame "+f+": ttest e1 == "                    +
-			   strofreal(e[1]) + ", l("+strofreal(lvl)+")", 1 - f_t)
+		       _stata("`version' frame "+f+": ttest e1 == "                    +
+		       strofreal(e[1]) + ", l("+strofreal(lvl)+")", ! f_t)
 	}
+
 	// return the solution `x', matrix `a' and NRMSE                            
 	st_matrix("r(solution)", colshape(x[1::rows(x)-S], c != . ? c : 1))
 	st_matrix("r(a)",        a, "hidden")
 	st_numscalar("r(nrmse)", e[1])
 }
+
 `RM' lppinv_runiform(`RS' r, `RS' c) return(runiform(r, c))        /* dummy   */
+
 end
