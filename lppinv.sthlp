@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.1.2  30sep2022}{...}
+{* *! version 1.1.3  07oct2022}{...}
 {vieweralsosee "[TS] arima" "mansection TS arima"}{...}
 {vieweralsosee "" "--"}{...}
 {vieweralsosee "[TS] arima postestimation" "help arima postestimation"}{...}
@@ -14,7 +14,7 @@
 
 {title:Title}
 {phang}
-{bf:lppinv} {hline 2} solve an under-, over- and identified linear problem
+{bf:lppinv} {hline 2} solve an under-, over-, and identified linear problem
 without an objective function (a "hybrid" LP-LS problem) with the help of
 the Moore-Penrose pseudoinverse and singular value decomposition (SVD) and
 test the normalized RMSE
@@ -24,7 +24,7 @@ test the normalized RMSE
 
 {p 8 17 2}
 {cmdab:lppinv}
-{help varlist|matname:{it:varlist|matname}}
+{help varlist|matname:{it:varlist|matname}} (rowsums first for TM problems)
 {ifin}
 [{cmd:,} {it:options}]
 
@@ -40,14 +40,14 @@ test the normalized RMSE
         {p_end}
 
 {syntab:Constructing the LHS}
-{synopt:{opth m:odel(varlist|matname)}}the MODEL part of {bf:`a'}
+{synopt:{opth m:odel(varlist|matname)}}the MODEL part of {bf:`a`}
         (see {help lppinv##methods:Methods and formulas})
         {p_end}
-{synopt:{opth c:onstraints(varlist|matname)}}the CONSTRAINTS part of {bf:`a'}
+{synopt:{opth c:onstraints(varlist|matname)}}the CONSTRAINTS part of {bf:`a`}
         {p_end}
-{synopt:{opth s:lackvars(varlist|matname)}}the SLACK VARIABLES part of {bf:`a'}
+{synopt:{opth s:lackvars(varlist|matname)}}the SLACK VARIABLES part of {bf:`a`}
         {p_end}
-{synopt:{opt zerod:iagonal}}set all the diagonal elements of {bf:`a'} to 0
+{synopt:{opt zerod:iagonal}}set all the diagonal elements of {bf:`a`} to 0
         {p_end}
 
 {syntab:SVD-based estimation}
@@ -57,7 +57,7 @@ test the normalized RMSE
         {it:tol}=0){p_end}
 {synopt:{opth l:evel(#)}} confidence level (by default: {helpb clevel:c(level)})
 
-{syntab :Monte-Carlo-based t-test}
+{syntab:Monte-Carlo-based t-test}
 {synopt:{opth seed(#)}}random-number seed, # is any number between 0 and
         2^31-1 (or 2,147,483,647)
         (by default:{helpb set_seed: c(rngseed_mt64s)}) {p_end}
@@ -93,9 +93,9 @@ available after estimation.{p_end}
 {title:Description}
 
 {pstd}
-The algorithm solves "hybrid" least squares linear programming (LS-LP) problems
+The algorithm solves "hybrid" linear programming-least squares (LP-LS) problems
 with the help of the Moore-Penrose inverse (pseudoinverse), calculated using
-{help mf_svsolve:singular value decomposition (SVD)}, with emphasis on
+{help mf_svsolve:singular value decomposition (SVD)}, with emphasis on the
 estimation of non-typical constrained OLS ({bf:cOLS}), Transaction Matrix
 ({bf:TM}), and {bf:custom} (user-defined) cases. The pseudoinverse offers
 a unique solution and may be the best linear unbiased estimator (BLUE) for a
@@ -103,14 +103,14 @@ group of problems under certain conditions, see Albert (1972). Over- and
 identified problems are accompanied by {helpb regress:regression} analysis,
 which is feasible in their case. For such and especially all remaining cases,
 a Monte-Carlo-based {helpb ttest:t-test} of mean {bf:NRMSE} (normalized
-by variance of the RHS) is performed, the sample being drawn from a uniform
-or user-provided distribution (via a {help m2_ftof:Mata function}).
+by the standard deviation of the RHS) is performed, the sample being drawn from
+a uniform or user-provided distribution (via a {help m2_ftof:Mata function}).
 
 {pstd}
-Non-typical constrained OLS ({bf:cOLS}) is based on constraints in model and/or
-data but not in parameters. Typically, such models are of size ≤ {bf:2N} where
-{bf:N} is the number of observations (Bolotov, 2014). Furthermore, the number
-of their parameters may vary in the LHS from row to row (e.g. level vs
+Non-typical constrained OLS ({bf:cOLS}) is based on constraints in the model
+and/or data but not in parameters. Typically, such models are of size ≤ {bf:2N}, 
+here {bf:N} is the number of observations (Bolotov, 2014). Furthermore, the
+number of their parameters may vary in the LHS from row to row (e.g., level vs.
 derivative).
 
 {pstd}
@@ -121,7 +121,8 @@ derivative).
 
 {pstd}
 Transaction Matrix ({bf:TM}) of size ({bf:M x N}) is a formal model of
-interaction between {bf:M} and {bf:N} elements in a system (Bolotov, 2015). For
+interaction between {bf:M} and {bf:N} elements in any imaginable system, such
+as the national economy, trade, investment, etc. (Bolotov, 2015). For
 example,
 {break}{bind:    • }an input-output table (IOT) is a type of {bf:TM}
 where {bf:M = N} and the elements are industries;
@@ -133,23 +134,23 @@ and some elements are known;
 {break}{bind:    }...
 
 {pstd}
-{bf:Example of an TM problem:}
+{bf:Example of a TM problem:}
 {break}{it:Estimate the input-output table or a matrix of trade/investment},
-{it:the technical coefficients or (country) shares of which are unknown.}
+{it:the technical coefficients, or (country) shares of which are unknown.}
 
 {pstd}
 {cmd:lppinv} returns matrix {bf:r(solution)}, scalar {bf:r(nrmse)}, and
-{helpb ttest:t-test} results. In addition, matrix {bf:r(a)} is available with
-the help of the command: {break}{cmd:. return list, all}.
+regression and/or {helpb ttest:t-test} results. In addition, matrix {bf:r(a)}
+is available with the help of the command: {break}{cmd:. return list, all}.
 
 {marker methods}{...}
 {title:Methods and formulas}
 
 {pstd}
-The problem is written as a matrix equation {bf:`a @ x = b`} where {bf:`a`}
-consists of coefficients for CONSTRAINTS and for SLACK VARIABLES (the upper
-part) as well as for MODEL (the lower part) as illustrated in Figure 1. Each
-part of {bf:`a`} can be omitted to accommodate a special case:
+The LP-LS problem is written as a matrix equation {bf:`a @ x = b`} where
+{bf:`a`} consists of coefficients for CONSTRAINTS and for SLACK VARIABLES
+(the upper part) as well as for MODEL (the lower part), as illustrated in
+Figure 1. Each part of {bf:`a`} can be omitted to accommodate a special case:
 {break}{bind:    • }{bf:cOLS} problems require no case-specific CONSTRAINTS;
 {break}{bind:    • }{bf:TM} problems require case-specific CONSTRAINTS, no
 problem CONSTRAINTS, and an optional MODEL;
@@ -172,16 +173,16 @@ constraints and are omitted if problems don't include any;
 {pstd}
 The solution of the equation, {bf:`x = pinv(a) @ b`}, is estimated with the
 help of {help mf_svsolve:SVD} and is a {bf:minimum-norm least-squares}
-{bf:generalized solution} if rank of {bf:`a`} is not full. To check if {bf:`a`}
-is within computational limits, its (maximum) dimensions can be calculated
-using the formulas:
+{bf:generalized solution} if the rank of {bf:`a`} is not full. To check if
+{bf:`a`} is within computational limits, its (maximum) dimensions can be
+calculated using the formulas:
 {break}{bind:    • }{bf:(2 * N) x (K + K*)}{bind:      }{bf:cOLS} without
 slack variables;
 {break}{bind:    • }{bf:(2 * N) x (K + K* + 1)}{bind:  }{bf:cOLS} with
 slack variables;
-{break}{bind:    • }{bf:(M * N) x (M * N)}{bind:       }{bf:TM} without
+{break}{bind:    • }{bf:(M + N) x (M * N)}{bind:       }{bf:TM} without
 slack variables;
-{break}{bind:    • }{bf:(M * N) x (M * N + 1)}{bind:   }{bf:TM} with slack
+{break}{bind:    • }{bf:(M + N) x (M * N + 1)}{bind:   }{bf:TM} with slack
 variables;
 {break}{bind:    • }{bf:M x N}{bind:                   }{bf:custom} without
 slack variables;
@@ -200,7 +201,7 @@ the transaction matrix; and in custom cases, {bf:M} and {bf:N} or
 {title:Remarks}
 
 {pstd}
-For Python-savy users there is a Python version of {cmd:lppinv}
+For Python-savvy users, there is a Python version of {cmd:lppinv}
 {browse "https://pypi.org/project/lppinv/"} with similar functionality.
 
 {marker examples}{...}
@@ -217,6 +218,7 @@ For Python-savy users there is a Python version of {cmd:lppinv}
         {cmd:. gen rowsum = rnormal(15, 100)}
         {cmd:. gen colsum = rnormal(12, 196)}
         {cmd:. lppinv rowsum colsum, tm level(90)}
+        {cmd:. lppinv rowsum colsum, tm zerod level(90)}
         {cmd:. matlist r(solution)}
 
         TM problem (with Monte Carlo t-test based on normal distribution):
@@ -224,6 +226,23 @@ For Python-savy users there is a Python version of {cmd:lppinv}
         {cmd:. mata: function lppinv_normal(r, c) return(rnormal(r,c, 0, 1))}
         {cmd:. lppinv rowsum colsum, tm level(90) dist(lppinv_normal)}
         {cmd:. matlist r(solution)}
+
+{title:Author}
+
+{pstd}
+{bf:Ilya Bolotov}
+{break}Prague University of Economics and Business
+{break}Prague, Czech Republic
+{break}{browse "mailto:ilya.bolotov@vse.cz":ilya.bolotov@vse.cz}
+
+{pstd}
+    Thanks for citing this software and my works on the topic:
+
+{p 8 8 2}
+    Bolotov, I. (2022). LPPINV: Stata module to solve an under-, over- and
+    identified linear problem without an objective function with the
+    Moore-Penrose pseudoinverse and singular value decomposition (SVD).
+    Available from {browse "https://ideas.repec.org/c/boc/bocode/s459045.html"}.
 
 {marker references}{...}
 {title:References}
